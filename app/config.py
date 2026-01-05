@@ -71,6 +71,7 @@ class Settings(BaseSettings):
     NFC_ECASH_CLEARING: bool = True
     NFC_DEFAULT: List = ["Badge","Member"]
     LOCAL_RELAY_PORT: int = 8735
+    LOCAL_RELAY_HOST: str = "0.0.0.0"
     TOKEN_EXPIRES_WEEKS: int = 4
     TOKEN_EXPIRES_HOURS: int = 8
     SESSION_AGE_DAYS: int = 30

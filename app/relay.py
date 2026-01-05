@@ -19,7 +19,7 @@ async def run_relay():
     r = PQRelay(store=relay_store)
    
     try:
-        await r.start(port=settings.LOCAL_RELAY_PORT)
+        await r.start(host=settings.LOCAL_RELAY_HOST, port=settings.LOCAL_RELAY_PORT)
     except:
         pass
 
