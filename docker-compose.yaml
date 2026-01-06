@@ -1,0 +1,11 @@
+services:
+  pqrelay:
+    image: pqrelay:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8735:8735"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
