@@ -9,7 +9,7 @@ from nqsafe import PQEvent
 import oqs
 
 RELAY_POOL = ["ws://localhost:8735"]
-# RELAY_POOL = ["ws://beelink:8735"]
+
 
 async def publish(event: Event):
     
@@ -75,8 +75,11 @@ if __name__ == "__main__":
     pq_event.sign(priv_key=secret_key.hex())
     print(f"nostr pqevent {pq_event.data()}")
     print(f"is valid: {pq_event.is_valid()}")
+
+    # You can modify the content after signing to see if there is a validation error
     # pq_event.content = "modified after signing"
-    #Let's try a regular event
+    
+    #Let's create a regular event
     regular_keys = Keys()
     regular_pubkey = regular_keys.public_key_hex()
 
@@ -86,6 +89,8 @@ if __name__ == "__main__":
     
     regular_event.sign(priv_key=regular_keys.private_key_hex())
     print(f"check to see if reqular event is valid {regular_event.is_valid()}")
+    
+    # You can modify the content after the signing to see if there are validation errors
     # regular_event.content ="modified after signing"
 
     asyncio.run(publish(regular_event))
@@ -94,7 +99,7 @@ if __name__ == "__main__":
     asyncio.run(pqc_publish(pq_event))
     print(f"check to see if pqc event is valid {pq_event.is_valid()}")
 
-    # print("pq event published!")
+    print("pq event published!")
 
     event_data = pq_event.data()
     print(f"event data: {event_data}")
