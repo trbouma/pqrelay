@@ -9,6 +9,7 @@ from nqsafe import PQEvent
 import oqs
 
 RELAY_POOL = ["ws://localhost:8735"]
+# RELAY_POOL = ["ws://beelink:8735"]
 
 async def publish(event: Event):
     

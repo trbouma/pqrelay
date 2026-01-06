@@ -12,7 +12,7 @@ cffi==2.0.0
 cryptography==46.0.3
 frozenlist==1.8.0
 idna==3.11
-liboqs-python @ file:///Users/trbouma/projects/liboqs-python
+liboqs-python @ git+https://github.com/open-quantum-safe/liboqs-python.git@main
 monstr==0.1.9
 multidict==6.7.0
 propcache==0.4.1
