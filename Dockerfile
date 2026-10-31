@@ -16,9 +16,14 @@ RUN git clone https://github.com/open-quantum-safe/liboqs.git /tmp/liboqs \
     && cmake --install /tmp/liboqs/build
 
 WORKDIR /build
-COPY requirements.txt .
-RUN python -m venv /opt/venv \
-    && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
+COPY pyproject.toml poetry.lock ./
+RUN pip install --no-cache-dir poetry==1.8.5 \
+    && python -m venv /opt/venv
+ENV VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:$PATH" \
+    POETRY_VIRTUALENVS_CREATE=false \
+    POETRY_EXPERIMENTAL_SYSTEM_GIT_CLIENT=true
+RUN poetry install --only main --no-root --no-interaction --no-ansi
 
 FROM python:3.11-slim-bookworm
 RUN apt-get update && apt-get install -y --no-install-recommends libssl3 ca-certificates \

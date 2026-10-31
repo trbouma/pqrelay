@@ -30,6 +30,13 @@ database if a clean ML-DSA-only experiment is needed.
 Python 3.11–3.13 is required by Stroma. The old Python 3.10 virtual environment
 must not be reused.
 
+Poetry 1.8 or newer manages dependencies using `pyproject.toml` and the committed
+`poetry.lock`. This is an application-only project (`package-mode = false`), so
+Poetry installs dependencies without packaging the `app` directory. Runtime pins
+are preserved from the existing requirements files; development tests are in the
+`dev` group. The requirements files remain available for existing pip workflows,
+but Poetry and Docker use the lockfile.
+
 Stroma is pinned to commit
 `51496fa6094a126311e9ea59ea06081cd8fbf9f7` with its `pq` extra.
 That extra pins liboqs-python 0.16.0.2; native liboqs must be 0.16.0.
@@ -46,7 +53,8 @@ docker compose up -d pqrelay
 The builder compiles pinned liboqs commit
 `5a1a854b0dc9f2141bdc771c555ee60c37950183` (0.16.0), enabling ML-DSA-44
 and ML-KEM-768. ML-KEM is required by the fixed Stroma backend but is not used
-for relay events. Python dependencies also install in the builder.
+for relay events. Poetry installs locked runtime dependencies in the builder;
+development dependencies and Poetry itself are not copied into the runtime image.
 The runtime image contains no compiler or Git client and checks backend loading
 during its build.
 
@@ -64,17 +72,17 @@ checking compatibility.
 ```sh
 python3.12 -m venv .venv-pq
 source .venv-pq/bin/activate
-pip install -r requirements-dev.txt
+poetry install
 export PQRELAY_LIBOQS_PATH=/absolute/path/to/liboqs.dylib
 mkdir -p data
-python app/relay.py
+poetry run python app/relay.py
 ```
 
 Use the appropriate `.so` or `.dll` path on other platforms. In another terminal
 with the same environment:
 
 ```sh
-python app/nostr.py
+poetry run python app/nostr.py
 ```
 
 The demo uses Stroma's acknowledgement-aware publishing. Its local `pqclient`
@@ -87,13 +95,18 @@ a PQ verification boundary.
 ## Tests
 
 ```sh
-python -m pytest -q tests
+poetry run pytest -q
 ```
 
 With `PQRELAY_LIBOQS_PATH` set, this includes real ML-DSA operations and a
 temporary local relay/SQLite publish-and-query test. Without it, native tests
 skip while classical and malformed-input checks run. Tests never use the
 existing relay database or wallet keys.
+
+For runtime dependencies only, use `poetry install --only main`. After changing
+dependencies, regenerate and commit `poetry.lock` and keep the pip compatibility
+files synchronized. Installing with Poetry does not install or compile native
+liboqs; provision it separately or use Docker.
 
 This remains unaudited experimental software. Passing tests is not a production
 security claim, and a signed plaintext record is still publicly readable.

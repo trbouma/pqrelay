@@ -1,5 +1,6 @@
 .git
 .venv
+.venv-pq
 __pycache__
 .pytest_cache
 data
