@@ -1,13 +1,20 @@
 FROM python:3.11-slim-bookworm AS builder
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential cmake git ninja-build pkg-config libssl-dev ca-certificates \
+    build-essential cmake git ninja-build pkg-config libssl-dev ca-certificates coreutils \
     && rm -rf /var/lib/apt/lists/*
 
 # liboqs 0.16.0: explicit build-time provisioning, never a runtime install.
 ARG LIBOQS_REF=5a1a854b0dc9f2141bdc771c555ee60c37950183
-RUN git clone https://github.com/open-quantum-safe/liboqs.git /tmp/liboqs \
-    && git -C /tmp/liboqs checkout "${LIBOQS_REF}" \
-    && cmake -S /tmp/liboqs -B /tmp/liboqs/build -G Ninja \
+# Fail after 60 seconds below 1 KiB/s, or 10 minutes total. Never fetch history.
+RUN git init /tmp/liboqs \
+    && git -C /tmp/liboqs remote add origin https://github.com/open-quantum-safe/liboqs.git \
+    && GIT_TERMINAL_PROMPT=0 timeout --kill-after=30s 600s \
+       git -C /tmp/liboqs -c http.lowSpeedLimit=1024 -c http.lowSpeedTime=60 \
+       fetch --depth=1 --no-tags --progress origin "${LIBOQS_REF}" \
+    && git -C /tmp/liboqs checkout --detach FETCH_HEAD \
+    && test "$(git -C /tmp/liboqs rev-parse HEAD)" = "${LIBOQS_REF}"
+
+RUN cmake -S /tmp/liboqs -B /tmp/liboqs/build -G Ninja \
        -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON \
        -DOQS_BUILD_ONLY_LIB=ON -DOQS_USE_OPENSSL=ON \
        '-DOQS_MINIMAL_BUILD=SIG_ml_dsa_44;KEM_ml_kem_768' \
