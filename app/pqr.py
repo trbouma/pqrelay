@@ -14,6 +14,23 @@ from nqsafe import PQEvent
 class PQRelay(Relay):
     pq: bool = True
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Preserve Monstr's store-dependent supported_nips. PQ signatures are
+        # an experimental extension, not an additional standardized NIP.
+        self._relay_information.update({
+            'software': 'https://github.com/trbouma/pqrelay',
+            'version': '0.1.0',
+        })
+        self._relay_information.setdefault('name', 'pqrelay')
+        self._relay_information.setdefault(
+            'description',
+            'Experimental relay for classical Nostr events and nonstandard '
+            'ML-DSA-44-signed events, using Stroma cryptography and Monstr '
+            'relay storage. PQ signatures are not a standardized NIP and '
+            'do not encrypt event content.'
+        )
+
     async def _do_event(self, req_json, ws):
         if len(req_json) <= 1:
             raise NostrNoticeException('EVENT command missing event data')

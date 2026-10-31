@@ -15,6 +15,20 @@ def classical():
     return event.data()
 
 
+def test_relay_metadata_preserves_supported_nips():
+    from monstr.relay.relay import Relay
+    from pqr import PQRelay
+
+    info = PQRelay().relay_information
+    assert info['name'] == 'pqrelay'
+    assert info['software'] == 'https://github.com/trbouma/pqrelay'
+    assert info['version'] == '0.1.0'
+    assert 'ML-DSA-44' in info['description']
+    assert 'not a standardized NIP' in info['description']
+    assert info['supported_nips'] == Relay().relay_information['supported_nips']
+    assert PQRelay(name='My relay').relay_information['name'] == 'My relay'
+
+
 def test_classical_roundtrip():
     data = classical()
     assert PQEvent.load(data, validate=True).data() == data
@@ -74,6 +88,10 @@ async def test_relay_sqlite_publish_query_and_rejection(tmp_path, pq_event):
     port = next(iter(relay._runner.sites))._server.sockets[0].getsockname()[1]
     try:
         async with aiohttp.ClientSession() as session:
+            async with session.get(f"http://127.0.0.1:{port}/") as response:
+                info = await response.json(content_type=None)
+                assert info == relay.relay_information
+                assert info['software'] == 'https://github.com/trbouma/pqrelay'
             async with session.ws_connect(f"http://127.0.0.1:{port}/") as ws:
                 ids = []
                 for data in (classical(), pq_event.data()):
