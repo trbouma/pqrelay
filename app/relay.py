@@ -4,6 +4,7 @@ from monstr.relay.relay import Relay
 
 from monstr.event.persist_sqlite import RelaySQLiteEventStore
 from pqr import PQRelay
+from nqsafe import get_backend
 import os
 
 from config import Settings
@@ -12,6 +13,7 @@ settings = Settings()
 
 
 async def run_relay():
+    get_backend()  # Fail startup rather than install or downgrade at runtime.
     relay_store = RelaySQLiteEventStore(db_file=settings.SERVICE_RELAY_DB)
     try:
         relay_store.create()

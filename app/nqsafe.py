@@ -1,123 +1,88 @@
-from monstr.event.event import Event
-from typing import Union
+"""Nonstandard PQ events: Stroma crypto with Monstr relay/storage compatibility."""
+from functools import lru_cache
 import json
-import secp256k1
+import os
+import re
 
-import oqs
+from monstr.event.event import Event
+from stroma import Event as StromaEvent
+from stroma.pq import PQBackend
+
+
+@lru_cache(maxsize=1)
+def get_backend():
+    return PQBackend(os.environ.get("PQRELAY_LIBOQS_PATH", "/usr/local/lib/liboqs.so"))
+
+
+def _hex(value, size):
+    return isinstance(value, str) and len(value) == size * 2 and re.fullmatch(r"[0-9a-f]+", value) is not None
+
+
+def validate_shape(data):
+    if not isinstance(data, dict):
+        raise ValueError("event must be an object")
+    if not _hex(data.get("id"), 32):
+        raise ValueError("invalid event id")
+    public = data.get("pubkey")
+    if not (_hex(public, 32) or _hex(public, 1312)):
+        raise ValueError("only secp256k1 and ML-DSA-44 public keys are supported")
+    if not _hex(data.get("sig"), 64 if len(public) == 64 else 2420):
+        raise ValueError("invalid signature encoding or size")
+    for field in ("created_at", "kind"):
+        if not isinstance(data.get(field), int) or isinstance(data[field], bool) or not 0 <= data[field] <= 2**63 - 1:
+            raise ValueError(f"invalid {field}")
+    if not isinstance(data.get("content"), str):
+        raise ValueError("content must be a string")
+    tags = data.get("tags")
+    if not isinstance(tags, list) or any(
+        not isinstance(tag, list) or not tag or any(not isinstance(v, str) for v in tag)
+        for tag in tags
+    ):
+        raise ValueError("tags must be arrays of strings")
 
 
 class PQEvent(Event):
-    test: str
-    sigalg: str = "ML-DSA-44"
+    sigalg = "ML-DSA-44"
+
+    def _stroma_event(self):
+        return StromaEvent.load(self.data())
 
     def sign(self, priv_key):
-        
-        print(f"length of private key {len(priv_key)}")
-        if len(priv_key) > 64: 
-            signer = oqs.Signature(self.sigalg,secret_key=bytes.fromhex(priv_key))
-            # print(f"sign with {priv_key}")
-            self._get_id()
-            id_bytes = (bytes(bytearray.fromhex(self._id)))
-        
-            signature = signer.sign(id_bytes)
-            self._sig = signature.hex()
+        if not isinstance(priv_key, str):
+            raise ValueError("private key must be hex")
+        event = self._stroma_event()
+        if len(priv_key) == 64:
+            event.sign(priv_key)
+            self._pub_key, self._id, self._sig = event.pub_key, event.id, event.sig
         else:
-            self._get_id()
-
-           
-            pk = secp256k1.PrivateKey()
-            pk.deserialize(priv_key)
-
-            id_bytes = (bytes(bytearray.fromhex(self._id)))
-            sig = pk.schnorr_sign(id_bytes, bip340tag='', raw=True)
-            sig_hex = sig.hex()
-
-            self._sig = sig_hex
+            if not _hex(priv_key, 2560) or not _hex(self.pub_key, 1312):
+                raise ValueError("ML-DSA-44 key sizes required")
+            event_id = event.calculate_id()
+            backend = get_backend()
+            signature = backend.sign(bytes.fromhex(event_id), bytes.fromhex(priv_key), context=b"")
+            if not backend.verify(bytes.fromhex(event_id), signature, bytes.fromhex(self.pub_key), context=b""):
+                raise ValueError("signing key does not match event public key")
+            self._id, self._sig = event_id, signature.hex()
 
     def is_valid(self):
-        is_valid = False
         try:
-            if len(self.pub_key) > 64:
-            
-                verifier = oqs.Signature(self.sigalg)
+            data = self.data()
+            validate_shape(data)
+            event = StromaEvent.load(data)
+            if event.calculate_id() != data["id"]:
+                return False
+            if len(data["pubkey"]) == 64:
+                return event.is_valid()
+            return get_backend().verify(bytes.fromhex(data["id"]), bytes.fromhex(data["sig"]),
+                                        bytes.fromhex(data["pubkey"]), context=b"")
+        except (TypeError, ValueError):
+            return False
 
-                id_bytes = (bytes(bytearray.fromhex(self.id)))
-                sig_bytes = (bytes(bytearray.fromhex(self.sig)))
-                pub_key_bytes = (bytes(bytearray.fromhex(self.pub_key)))
-
-                is_valid = verifier.verify(id_bytes, sig_bytes, pub_key_bytes)
-            else:
-                
-                pub_key = secp256k1.PublicKey(bytes.fromhex('02'+self._pub_key),
-                                        raw=True)
-
-                is_valid = pub_key.schnorr_verify(
-                            msg=bytes.fromhex(self._id),
-                            schnorr_sig=bytes.fromhex(self._sig),
-                            bip340tag='', raw=True)
-        except:
-            is_valid = False   
-                 
-        return is_valid
-    
-    @staticmethod    
-    def load(event_data: Union[str, dict], validate=False) -> 'PQEvent':
-        """
-            return a Event object either from a dict or json str this replaces the old from_JSON method
-            that was actually just from a string...
-            if validate is set True will test the event sig, if it's not None will be returned
-
-        """
-        if isinstance(event_data, str):
-            try:
-                event_data = json.loads(event_data)
-            except Exception as e:
-                event_data = {}
-
-        id = None
-        if 'id' in event_data:
-            id = event_data['id']
-
-        sig = None
-        if 'sig' in event_data:
-            sig = event_data['sig']
-
-        kind = None
-        if 'kind' in event_data:
-            kind = event_data['kind']
-
-        content = None
-        if 'content' in  event_data:
-            content = event_data['content']
-
-        tags = None
-        if 'tags' in event_data:
-            tags = event_data['tags']
-
-        pub_key = None
-        if 'pubkey' in event_data:
-            pub_key = event_data['pubkey']
-
-        created_at = None
-        if 'created_at' in event_data:
-            created_at = event_data['created_at']
-
-        ret = PQEvent(
-            id=id,
-            sig=sig,
-            kind=kind,
-            content=content,
-            tags=tags,
-            pub_key=pub_key,
-            created_at=created_at
-        )
-
-        # None ret if validating and the evnt is not valid
-        if validate is True and ret.is_valid() is False:
-            ret = None
-
-        return ret
-
-
-if __name__ == "main":
-    print("nostr nqsafe")
+    @staticmethod
+    def load(event_data, validate=False):
+        data = json.loads(event_data) if isinstance(event_data, str) else event_data
+        validate_shape(data)
+        event = PQEvent(id=data["id"], sig=data["sig"], kind=data["kind"],
+                        content=data["content"], tags=data["tags"], pub_key=data["pubkey"],
+                        created_at=data["created_at"])
+        return event if not validate or event.is_valid() else None

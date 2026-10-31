@@ -8,7 +8,7 @@ from typing import List, Optional, Union
 import os
 from pathlib import Path
 
-from monstr.encrypt import Keys
+from stroma import Keys
 
 # Project Directories
 ROOT = pathlib.Path(__file__).resolve().parent.parent

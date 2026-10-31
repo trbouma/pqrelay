@@ -4,6 +4,7 @@ from monstr.event.event import Event
 from monstr.event.persist import RelayEventStoreInterface, ARelayEventStoreInterface
 
 import logging, json
+import asyncio
 from typing import Union
 
 from nqsafe import PQEvent
@@ -17,17 +18,17 @@ class PQRelay(Relay):
         if len(req_json) <= 1:
             raise NostrNoticeException('EVENT command missing event data')
         
-        len_pubkey = len(req_json[1]['pubkey'])
-        print(f"len pubkey is: {len_pubkey}")
+        try:
+            evt = PQEvent.load(req_json[1])
+        except (TypeError, ValueError) as exc:
+            data = req_json[1]
+            event_id = data.get('id', '') if isinstance(data, dict) else ''
+            if not isinstance(event_id, str) or len(event_id) != 64:
+                event_id = ''
+            raise NostrCommandException(event_id=event_id, success=False,
+                                        message='invalid: malformed or unsupported event') from exc
 
-        if len_pubkey > 64:
-            evt = PQEvent.load(req_json[1])   
-        else:
-            evt = Event.load(req_json[1])
-            
-            
-            
-        if not evt.is_valid():
+        if not await asyncio.to_thread(evt.is_valid):
             raise NostrCommandException(event_id=evt.id,
                                        success=False,
                                        message='invalid: signature validation failed')
@@ -100,6 +101,9 @@ class PQRelay(Relay):
                 evts = self._store.get_filter(filter)
 
         for c_evt in evts:
+            # SQLite stores tags as JSON text; emit arrays on the wire.
+            if isinstance(c_evt, dict) and isinstance(c_evt.get('tags'), str):
+                c_evt = {**c_evt, 'tags': json.loads(c_evt['tags'])}
             logging.info(f"send c_evt {c_evt}")
             await self._send_event(ws, the_sub, c_evt)
 
