@@ -1,11 +1,9 @@
 import asyncio
 import logging
-from monstr.relay.relay import Relay
 
 from monstr.event.persist_sqlite import RelaySQLiteEventStore
 from pqr import PQRelay
 from nqsafe import get_backend
-import os
 
 from config import Settings
 
@@ -23,11 +21,21 @@ async def run_relay():
    
     try:
         await r.start(host=settings.LOCAL_RELAY_HOST, port=settings.LOCAL_RELAY_PORT)
-    except Exception as e:
-        logging.debug(f"Failed to start{e}")
-        pass
+    finally:
+        # Monstr's runner invokes its shutdown hook to close active WebSockets.
+        # It may not exist yet if startup failed before runner initialization.
+        if getattr(r, '_runner', None) is not None:
+            await r.end_background()
 
-if __name__ == '__main__':
+
+def main():
     logging.getLogger().setLevel(logging.DEBUG)
     logging.debug(f"{settings.LOCAL_RELAY_HOST}")
-    asyncio.run(run_relay())
+    try:
+        asyncio.run(run_relay())
+    except KeyboardInterrupt:
+        logging.info("Relay stopped")
+
+
+if __name__ == '__main__':
+    main()
